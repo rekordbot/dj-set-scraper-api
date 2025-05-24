@@ -1,50 +1,34 @@
 from playwright.sync_api import sync_playwright
+import time
 
-def scrape_trackid_mixes(artist_name: str):
-    print(f"Starting scrape for artist: {artist_name}")
-    results = []
+def scrape_trackid_mixes(artist: str):
+    search_url = f"https://trackid.net/audiostreams?keywords={artist}"
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-
-        search_url = f"https://trackid.net/search?q={artist_name.replace(' ', '+')}"
         print(f"Navigating to: {search_url}")
-        page.goto(search_url)
+        page.goto(search_url, timeout=60000)
 
         try:
             page.wait_for_selector(".audiostream-card", timeout=10000)
-        except Exception as e:
-            print("Could not find any cards:", e)
-            return []
+        except:
+            browser.close()
+            raise Exception("Could not find any cards: Page.wait_for_selector timed out.")
 
-        cards = page.query_selector_all(".audiostream-card")[:10]
-        print(f"Found {len(cards)} mix cards")
+        cards = page.locator(".audiostream-card")
+        count = cards.count()
+        results = []
 
-        for card in cards:
-            title = card.query_selector(".title").inner_text().strip()
-            link = card.query_selector("a").get_attribute("href")
-            url = f"https://trackid.net{link}"
-            date_el = card.query_selector(".date")
-            date_text = date_el.inner_text().strip() if date_el else None
-
-            page.goto(url)
-            try:
-                page.wait_for_selector("ul.tracklist", timeout=5000)
-                track_els = page.query_selector_all("ul.tracklist li")
-                tracks = [t.inner_text().strip() for t in track_els]
-            except:
-                tracks = []
-
-            print(f"Scraped mix: {title} – {date_text}")
-
+        for i in range(count):
+            card = cards.nth(i)
+            title = card.locator(".audiostream-title").inner_text()
+            link = card.locator("a").get_attribute("href")
+            full_link = f"https://trackid.net{link}"
             results.append({
                 "title": title,
-                "url": url,
-                "date": date_text,
-                "tracklist": tracks
+                "url": full_link
             })
 
         browser.close()
-
-    return results
+        return results
