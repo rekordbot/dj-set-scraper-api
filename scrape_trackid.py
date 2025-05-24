@@ -1,32 +1,37 @@
-import requests
-from bs4 import BeautifulSoup
-
-BASE_URL = "https://trackid.net"
+from playwright.sync_api import sync_playwright
 
 def scrape_trackid_mixes(artist_name: str):
-    search_url = f"{BASE_URL}/search?q={artist_name.replace(' ', '+')}"
-    
-    # Bypass SSL cert verification
-    res = requests.get(search_url, verify=False)
-    soup = BeautifulSoup(res.text, "html.parser")
-
     results = []
-    for card in soup.select(".audiostream-card")[:10]:  # limit to 10 results
-        title = card.select_one(".title").get_text(strip=True)
-        url = BASE_URL + card.select_one("a")["href"]
-        date = card.select_one(".date")
-        date_text = date.get_text(strip=True) if date else None
 
-        # Also bypass SSL verification for each mix page
-        mix_page = requests.get(url, verify=False)
-        mix_soup = BeautifulSoup(mix_page.text, "html.parser")
-        tracks = [li.get_text(strip=True) for li in mix_soup.select("ul.tracklist li")]
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        search_url = f"https://trackid.net/search?q={artist_name.replace(' ', '+')}"
+        page.goto(search_url)
+        page.wait_for_selector(".audiostream-card", timeout=10000)
 
-        results.append({
-            "title": title,
-            "url": url,
-            "date": date_text,
-            "tracklist": tracks
-        })
+        cards = page.query_selector_all(".audiostream-card")[:10]
+
+        for card in cards:
+            title = card.query_selector(".title").inner_text().strip()
+            link = card.query_selector("a").get_attribute("href")
+            url = f"https://trackid.net{link}"
+            date_el = card.query_selector(".date")
+            date_text = date_el.inner_text().strip() if date_el else None
+
+            # Visit mix page
+            page.goto(url)
+            page.wait_for_selector("ul.tracklist", timeout=5000)
+            track_els = page.query_selector_all("ul.tracklist li")
+            tracks = [t.inner_text().strip() for t in track_els]
+
+            results.append({
+                "title": title,
+                "url": url,
+                "date": date_text,
+                "tracklist": tracks
+            })
+
+        browser.close()
 
     return results
