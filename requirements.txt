@@ -1,4 +1,5 @@
 fastapi
 uvicorn
+playwright
+# Needed for Playwright on Render
 requests
-beautifulsoup4
