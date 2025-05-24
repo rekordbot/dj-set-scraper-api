@@ -9,12 +9,13 @@ def scrape_trackid_mixes(artist_name: str):
         print(f"Navigating to: {search_url}")
         page.goto(search_url, timeout=60000)
 
-        # Wait for cards to appear
-        page.wait_for_selector(".audiostream-card__title", timeout=15000)
+        try:
+            page.wait_for_selector(".audiostream-card__title", timeout=20000)
+        except Exception:
+            raise Exception("Timed out waiting for results. Check selector or network.")
 
         cards = page.query_selector_all(".audiostream-card")
-        if not cards:
-            raise Exception("No mix cards found.")
+        print(f"Found {len(cards)} cards")
 
         results = []
         for card in cards:
@@ -24,7 +25,7 @@ def scrape_trackid_mixes(artist_name: str):
 
             title = title_elem.inner_text().strip() if title_elem else "Unknown Title"
             date = date_elem.inner_text().strip() if date_elem else "Unknown Date"
-            link = link_elem.get_attribute("href") if link_elem else "#"
+            link = link_elem.get_attribute("href") if link_elem else None
 
             results.append({
                 "title": title,
