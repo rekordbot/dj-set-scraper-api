@@ -1,22 +1,36 @@
 from playwright.sync_api import sync_playwright
 
-def scrape_trackid_mixes(artist):
-    search_url = f"https://trackid.net/audiostreams?keywords={artist}"
+def scrape_trackid_mixes(artist_name: str):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        page.goto(search_url)
 
-        # Wait for a visible link to a mix set
-        page.wait_for_selector("a.audiostreams__title", timeout=15000)
-        cards = page.query_selector_all("a.audiostreams__title")
+        search_url = f"https://trackid.net/audiostreams?keywords={artist_name}"
+        print(f"Navigating to: {search_url}")
+        page.goto(search_url, timeout=60000)
+
+        # Wait for cards to appear
+        page.wait_for_selector(".audiostream-card__title", timeout=15000)
+
+        cards = page.query_selector_all(".audiostream-card")
+        if not cards:
+            raise Exception("No mix cards found.")
 
         results = []
         for card in cards:
-            title = card.inner_text().strip()
-            link = card.get_attribute("href")
-            full_url = f"https://trackid.net{link}"
-            results.append({"title": title, "url": full_url})
+            title_elem = card.query_selector(".audiostream-card__title")
+            date_elem = card.query_selector(".audiostream-card__timestamp")
+            link_elem = card.query_selector("a")
+
+            title = title_elem.inner_text().strip() if title_elem else "Unknown Title"
+            date = date_elem.inner_text().strip() if date_elem else "Unknown Date"
+            link = link_elem.get_attribute("href") if link_elem else "#"
+
+            results.append({
+                "title": title,
+                "date": date,
+                "url": f"https://trackid.net{link}" if link else None
+            })
 
         browser.close()
         return results
